@@ -1,4 +1,7 @@
+import string
+import random
 from flask import Flask, render_template, request, redirect,jsonify, url_for, flash
+from flask import session as login_session
 app = Flask(__name__)
 
 from sqlalchemy import create_engine, asc
@@ -13,6 +16,13 @@ Base.metadata.bind = engine
 DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
+
+# Login route
+@app.route('/login/')
+def show_login():
+    state = "".join(random.choice(string.ascii_letters + string.digits) for x in range(32))
+    login_session['state'] = state
+    return 'State variable is {}'.format(login_session['state'])
 
 #JSON APIs to view Restaurant Information
 @app.route('/restaurant/<int:restaurant_id>/menu/JSON')
