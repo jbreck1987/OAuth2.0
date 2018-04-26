@@ -105,3 +105,6 @@ venv.bak/
 
 # Vagrant settings
 *.vagrant/*
+
+# Custom Settings
+client_secrets.json

@@ -1,13 +1,19 @@
 import string
 import random
-from flask import Flask, render_template, request, redirect,jsonify, url_for, flash
-from flask import session as login_session
-app = Flask(__name__)
+import httplib2
+import json
+import requests
 
+from flask import Flask, render_template, request, make_response
+from flask import session as login_session, redirect, jsonify, url_for, flash
 from sqlalchemy import create_engine, asc
 from sqlalchemy.orm import sessionmaker
 from database_setup import Base, Restaurant, MenuItem
+from oauth2client.client import flow_from_clientsecrets
+from oauth2client.client import FlowExchangeError
 
+
+app = Flask(__name__)
 
 #Connect to Database and create database session
 engine = create_engine('sqlite:///restaurantmenu.db')
@@ -16,6 +22,8 @@ Base.metadata.bind = engine
 DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
+CLIENT_ID = json.loads(open('client_secrets.json', 'r').read())['web']['client_id']
+
 
 # Login route
 @app.route('/login/')
@@ -23,6 +31,69 @@ def show_login():
     state = "".join(random.choice(string.ascii_letters + string.digits) for x in range(32))
     login_session['state'] = state
     return render_template('login.html', STATE=state)
+
+
+@app.route('/gconnect', methods=['POST'])
+def gconnect():
+    if request.args.get('state') != login_session['state']:
+        response = make_response(json.dumps('Invalid state parameter'), 401)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
+    code = request.data
+
+    try:
+        # Upgrade the authorization code into a credentials object
+        oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='')
+        oauth_flow.redirect_uri = 'postmessage'
+        credentials = oauth_flow.step2_exchange(code)
+    except FlowExchangeError:
+        response = make_response(
+            json.dumps('Failed to upgrade the authorization code.'), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    access_token = credentials.access_token
+    url = ('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=%s'
+           % access_token)
+    result = requests.get(url).json()
+
+    # If there was an error in the access token info, abort.
+    if result.get('error') is not None:
+        response = make_response(json.dumps(result.get('error')), 500)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    gplusid = credentials.id_token['sub']
+    if gplusid != result['user_id']:
+        response = make_response(json.dumps('User ID of token does not match response ID'), 401)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
+    stored_creds = login_session.get('credentials')
+    stored_gplusid = login_session.get('gplus_id')
+
+    if stored_creds is not None and stored_gplusid == gplusid:
+        response = make_response(json.dumps('User is already logged in'), 200)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
+    login_session['credentials'] = credentials.access_token
+    login_session['gplus_id'] = gplusid
+
+    userinfo_url = 'https://www.googleapis.com/oauth2/v1/userinfo'
+    params = {'access_token': credentials.access_token, 'alt': 'json'}
+
+    data = requests.get(userinfo_url, params=params).json()
+
+    login_session['username'] = data['name']
+    login_session['picture'] = data['picture']
+    login_session['email'] = data['email']
+
+    return ('Username = {}, email = {}'.format(login_session['username'], login_session['email']))
+
+
+
 
 #JSON APIs to view Restaurant Information
 @app.route('/restaurant/<int:restaurant_id>/menu/JSON')
