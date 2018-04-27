@@ -23,39 +23,54 @@ DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 CLIENT_ID = json.loads(open('client_secrets.json', 'r').read())['web']['client_id']
+USERINFO_URL = 'https://www.googleapis.com/oauth2/v1/userinfo'
+TOKENINFO_URL = 'https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='
+
+def state_gen():
+    '''Generates and returns 32 char state token to be used
+    to prevent cross-site forgery attacks'''
+    return "".join(random.choice(string.ascii_letters + string.digits) for x in range(32))
 
 
 # Login route
 @app.route('/login/')
 def show_login():
-    state = "".join(random.choice(string.ascii_letters + string.digits) for x in range(32))
+    state = state_gen()
     login_session['state'] = state
     return render_template('login.html', STATE=state)
 
 
 @app.route('/gconnect', methods=['POST'])
 def gconnect():
+    # Check to make sure state value of response from client matches
+    # state value passed in the initial login phase of the flow
     if request.args.get('state') != login_session['state']:
         response = make_response(json.dumps('Invalid state parameter'), 401)
         response.headers['Content-type'] = 'application/json'
         return response
 
+    # Extract one-time token from the response to use to obtain
+    # access code from google
     code = request.data
 
+    # Package up the one-time code and send it to google for authorization.
+    # Expecting a response with an access token for the requested resource(s)
     try:
-        # Upgrade the authorization code into a credentials object
         oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='')
         oauth_flow.redirect_uri = 'postmessage'
+
+        # Google should return a credentials object or error
         credentials = oauth_flow.step2_exchange(code)
+
     except FlowExchangeError:
         response = make_response(
             json.dumps('Failed to upgrade the authorization code.'), 401)
         response.headers['Content-Type'] = 'application/json'
         return response
 
+    # Check to make sure token is valid
     access_token = credentials.access_token
-    url = ('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=%s'
-           % access_token)
+    url = (TOKENINFO_URL + access_token)
     result = requests.get(url).json()
 
     # If there was an error in the access token info, abort.
@@ -63,10 +78,12 @@ def gconnect():
         response = make_response(json.dumps(result.get('error')), 500)
         response.headers['Content-Type'] = 'application/json'
         return response
-
+    # Check to make sure user ID from returned credentials object
+    # matches the user ID from returned token info
+    # data
     gplusid = credentials.id_token['sub']
     if gplusid != result['user_id']:
-        response = make_response(json.dumps('User ID of token does not match response ID'), 401)
+        response = make_response(json.dumps('User ID of access code does not match response ID'), 401)
         response.headers['Content-type'] = 'application/json'
         return response
 
@@ -81,10 +98,9 @@ def gconnect():
     login_session['credentials'] = credentials.access_token
     login_session['gplus_id'] = gplusid
 
-    userinfo_url = 'https://www.googleapis.com/oauth2/v1/userinfo'
     params = {'access_token': credentials.access_token, 'alt': 'json'}
 
-    data = requests.get(userinfo_url, params=params).json()
+    data = requests.get(USERINFO_URL, params=params).json()
 
     login_session['username'] = data['name']
     login_session['picture'] = data['picture']
