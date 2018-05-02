@@ -105,9 +105,7 @@ def gconnect():
     login_session['username'] = data['name']
     login_session['picture'] = data['picture']
     login_session['email'] = data['email']
-
-    return ('Username = {}, email = {}'.format(login_session['username'], login_session['email']))
-
+    flash('You are now logged in as {}!'.format(login_session['username']))
 
 
 
