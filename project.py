@@ -25,6 +25,7 @@ session = DBSession()
 CLIENT_ID = json.loads(open('client_secrets.json', 'r').read())['web']['client_id']
 USERINFO_URL = 'https://www.googleapis.com/oauth2/v1/userinfo'
 TOKENINFO_URL = 'https://www.googleapis.com/oauth2/v1/tokeninfo?access_token='
+REVOKE_TOKEN_URL = 'https://accounts.google.com/o/oauth2/revoke'
 
 def state_gen():
     '''Generates and returns 32 char state token to be used
@@ -107,7 +108,43 @@ def gconnect():
     login_session['email'] = data['email']
     flash('You are now logged in as {}!'.format(login_session['username']))
 
+    return 'User now logged in!'
 
+
+# Add route to disconnect user
+@app.route('/logout/')
+def gdisconnect():
+    # create new credentials object from session object
+    credentials = login_session.get('credentials')
+
+    if credentials is None:
+        response = make_response(json.dumps('User was not logged in'), 401)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
+    # get access token from credentials object and use
+    # in call to Google API to disconnect user
+    result = requests.post(REVOKE_TOKEN_URL,
+          params={'token': login_session.get('credentials')},
+          headers = {'content-type': 'application/x-www-form-urlencoded'})
+
+    # if 200 is returned, know that user was logged out.
+    # delete users session information
+    if result.status_code == 200:
+        del login_session['credentials']
+        del login_session['email']
+        del login_session['picture']
+        del login_session['gplus_id']
+        del login_session['username']
+
+        response = make_response(json.dumps('User was logged out!'), 200)
+        response.headers['Content-type'] = 'application/json'
+        return response
+
+    else:
+        response = make_response(json.dumps('Logout was unsuccessful'), 400)
+        response.headers['Content-type'] = 'application/json'
+        return response
 
 #JSON APIs to view Restaurant Information
 @app.route('/restaurant/<int:restaurant_id>/menu/JSON')
