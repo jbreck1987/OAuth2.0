@@ -8,7 +8,7 @@ from flask import Flask, render_template, request, make_response
 from flask import session as login_session, redirect, jsonify, url_for, flash
 from sqlalchemy import create_engine, asc
 from sqlalchemy.orm import sessionmaker
-from database_setup import Base, Restaurant, MenuItem
+from database_setup import Base, Restaurant, MenuItem, User
 from oauth2client.client import flow_from_clientsecrets
 from oauth2client.client import FlowExchangeError
 
@@ -146,6 +146,20 @@ def gdisconnect():
         response.headers['Content-type'] = 'application/json'
         return response
 
+
+# Create new user
+def create_user(login_session):
+    new_user = User(name=login_session['username'],
+                    email=login_session['email'],
+                    picture=login_session['picture'])
+
+    session.add(new_user)
+    session.commit()
+
+    # Get user ID of newly created user
+    user = session.query(User).filter_by(email=login_session['email']).one()
+    return user.id
+
 #JSON APIs to view Restaurant Information
 @app.route('/restaurant/<int:restaurant_id>/menu/JSON')
 def restaurantMenuJSON(restaurant_id):
@@ -279,7 +293,7 @@ def deleteMenuItem(restaurant_id, menu_id):
         return redirect(url_for('show_login'))
 
     restaurant = session.query(Restaurant).filter_by(id = restaurant_id).one()
-    itemToDelete = session.query(MenuItem).filter_by(id = menu_id).one() 
+    itemToDelete = session.query(MenuItem).filter_by(id = menu_id).one()
     if request.method == 'POST':
         session.delete(itemToDelete)
         session.commit()
