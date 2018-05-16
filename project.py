@@ -160,6 +160,14 @@ def create_user(login_session):
     user = session.query(User).filter_by(email=login_session['email']).one()
     return user.id
 
+
+# Get user object for READ operations
+def get_user_info(user_id):
+    user = session.query(User).filter_by(id=user_id).one()
+    if user:
+        return user
+    return None
+
 #JSON APIs to view Restaurant Information
 @app.route('/restaurant/<int:restaurant_id>/menu/JSON')
 def restaurantMenuJSON(restaurant_id):
