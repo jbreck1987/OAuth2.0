@@ -11,7 +11,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(250), nullable=False)
-    email = Column(String(), nullable=False)
+    email = Column(String(250), nullable=False)
     picture = Column(String(), nullable=True)
 
     @property
@@ -67,7 +67,7 @@ class MenuItem(Base):
        }
 
 
-engine = create_engine('sqlite:///restaurantmenu.db')
+engine = create_engine('sqlite:///restaurantmenu_withusers.db')
 
 
 Base.metadata.create_all(engine)
