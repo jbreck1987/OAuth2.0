@@ -161,11 +161,19 @@ def create_user(login_session):
     return user.id
 
 
-# Get user object for READ operations
+# Get User object for READ operations given the user ID
 def get_user_info(user_id):
     user = session.query(User).filter_by(id=user_id).one()
     if user:
         return user
+    return None
+
+
+# Get user ID given a user's email
+def get_user_id(user_email):
+    user = session.query(User).filter_by(email=user_email).one()
+    if user:
+        return user.id
     return None
 
 #JSON APIs to view Restaurant Information
