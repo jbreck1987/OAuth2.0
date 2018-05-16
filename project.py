@@ -108,6 +108,14 @@ def gconnect():
     login_session['email'] = data['email']
     flash('You are now logged in as {}!'.format(login_session['username']))
 
+    # If user exists, add user ID to login_session.
+    # If user doesnt exist, add them.
+    user_id = get_user_id(login_session['email'])
+    if user_id is not None:
+        login_session['user_id'] = user_id
+    else:
+        create_user(login_session)
+
     return 'User now logged in!'
 
 
